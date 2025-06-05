@@ -21,18 +21,43 @@ describe('JokesService', () => {
   });
 
   it('should be created', () => {
-    expect(service).toBeTruthy();
-  });
-
-  it('should call API on construction', () => {
     const mockJoke: Joke = {
       joke: 'Why did the chicken cross the road?',
       response: 'To get to the other side!'
     };
 
+    // Handle HTTP call from constructor
     const req = httpMock.expectOne('api/joke');
     expect(req.request.method).toBe('GET');
     req.flush(mockJoke);
+
+    expect(service).toBeTruthy();
+  });
+
+  it('should call API on construction and update subject', () => {
+    const mockJoke: Joke = {
+      joke: 'Test construction joke',
+      response: 'Test construction response'
+    };
+
+    // Get a fresh service instance to test constructor behavior
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      imports: [HttpClientTestingModule],
+      providers: [JokesService]
+    });
+    const freshService = TestBed.inject(JokesService);
+    const freshHttpMock = TestBed.inject(HttpTestingController);
+
+    const req = freshHttpMock.expectOne('api/joke');
+    expect(req.request.method).toBe('GET');
+    req.flush(mockJoke);
+
+    freshService.joke$().subscribe(joke => {
+      expect(joke).toEqual(mockJoke);
+    });
+
+    freshHttpMock.verify();
   });
 
   it('should get random joke and update subject', () => {
