@@ -1,0 +1,50 @@
+name: 🎨 Frontend CI
+
+on:
+  push:
+    branches: [main, develop]
+    paths: ['front/**']
+  pull_request:
+    branches: [main]
+    paths: ['front/**']
+
+jobs:
+  test-and-analyze:
+    name: 🧪 Test & Analyze Frontend
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 🔧 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: front/package-lock.json
+
+      - name: 📦 Install dependencies
+        working-directory: ./front
+        run: npm ci
+
+      - name: 🧪 Run tests with coverage
+        working-directory: ./front
+        run: npm run test:ci
+
+      - name: 🔍 SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        with:
+          projectBaseDir: front
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+      - name: 📊 Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          directory: ./front/coverage
+          flags: frontend
+          name: frontend-coverage 

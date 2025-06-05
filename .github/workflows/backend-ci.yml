@@ -1,0 +1,51 @@
+name: ☕ Backend CI
+
+on:
+  push:
+    branches: [main, develop]
+    paths: ['back/**']
+  pull_request:
+    branches: [main]
+    paths: ['back/**']
+
+jobs:
+  test-and-analyze:
+    name: 🧪 Test & Analyze Backend
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: ☕ Setup JDK 11
+        uses: actions/setup-java@v4
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+
+      - name: 📦 Cache Maven dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-m2
+
+      - name: 🧪 Run tests with JaCoCo
+        working-directory: ./back
+        run: mvn clean test jacoco:report
+
+      - name: 🔍 SonarCloud analysis
+        working-directory: ./back
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: mvn sonar:sonar
+
+      - name: 📊 Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          directory: ./back/target/site/jacoco
+          flags: backend
+          name: backend-coverage 
