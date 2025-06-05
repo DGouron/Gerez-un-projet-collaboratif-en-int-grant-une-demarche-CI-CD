@@ -44,7 +44,8 @@
         "useConst": "error",
         "useDefaultParameterLast": "error",
         "useExponentiationOperator": "error",
-        "useTemplate": "warn"
+        "useTemplate": "warn",
+        "useImportType": "off"
       },
       "suspicious": {
         "noAsyncPromiseExecutor": "error",
@@ -88,7 +89,7 @@
     "formatter": {
       "jsxQuoteStyle": "double",
       "quoteProperties": "asNeeded",
-      "trailingComma": "es5",
+      "trailingCommas": "es5",
       "semicolons": "always",
       "arrowParentheses": "always",
       "bracketSpacing": true,
