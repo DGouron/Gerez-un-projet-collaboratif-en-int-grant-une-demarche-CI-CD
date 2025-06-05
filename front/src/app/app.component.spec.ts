@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
+import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { AppComponent } from './app.component';
 import { JokesService } from './services/jokes.service';
 import type { Joke } from './model/joke.model';
@@ -15,7 +16,8 @@ describe('AppComponent', () => {
     await TestBed.configureTestingModule({
       declarations: [AppComponent],
       imports: [HttpClientTestingModule],
-      providers: [JokesService]
+      providers: [JokesService],
+      schemas: [NO_ERRORS_SCHEMA] // Ignore unknown elements like mat-toolbar, mat-card, etc.
     }).compileComponents();
     
     httpMock = TestBed.inject(HttpTestingController);
@@ -55,11 +57,13 @@ describe('AppComponent', () => {
     const constructorReq = httpMock.expectOne('api/joke');
     constructorReq.flush(mockJoke);
     
-    spyOn(app, 'getRandomJoke');
+    spyOn(app, 'getRandomJoke').and.callThrough();
+    spyOn(app['jokesService'], 'getRandomJoke'); // Mock the service method
     
     app.ngOnInit();
     
     expect(app.getRandomJoke).toHaveBeenCalled();
+    expect(app['jokesService'].getRandomJoke).toHaveBeenCalled();
   });
 
   it('should call jokesService.getRandomJoke when getRandomJoke is called', () => {
@@ -71,7 +75,8 @@ describe('AppComponent', () => {
     const constructorReq = httpMock.expectOne('api/joke');
     constructorReq.flush(mockJoke);
     
-    spyOn(jokesService, 'getRandomJoke');
+    // Mock the service method to avoid additional HTTP calls
+    spyOn(jokesService, 'getRandomJoke').and.stub();
     
     app.getRandomJoke();
     
