@@ -1,4 +1,4 @@
-import type { HttpClient } from '@angular/common/http';
+import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, type Observable } from 'rxjs';
 import type { Joke } from '../model/joke.model';
