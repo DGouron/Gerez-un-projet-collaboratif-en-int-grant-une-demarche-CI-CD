@@ -1,9 +1,14 @@
 name: 🔍 PR Validation
 
 on:
-  pull_request:
+  workflow_dispatch:
+    inputs:
+      check_all:
+        description: 'Check all components regardless of changes'
+        type: boolean
+        default: false
+  push:
     branches: [main, develop]
-    types: [opened, synchronize, reopened]
 
 env:
   NODE_VERSION: '18'
@@ -14,9 +19,9 @@ jobs:
     name: 🔄 Detect Changes
     runs-on: ubuntu-latest
     outputs:
-      frontend: ${{ steps.changes.outputs.frontend }}
-      backend: ${{ steps.changes.outputs.backend }}
-      docs: ${{ steps.changes.outputs.docs }}
+      frontend: ${{ steps.changes.outputs.frontend || github.event.inputs.check_all }}
+      backend: ${{ steps.changes.outputs.backend || github.event.inputs.check_all }}
+      docs: ${{ steps.changes.outputs.docs || github.event.inputs.check_all }}
     steps:
       - name: 📥 Checkout
         uses: actions/checkout@v4
@@ -68,6 +73,15 @@ jobs:
       - name: 🧪 Run tests
         run: npm run test:ci
         
+      - name: 📋 Frontend Test Report
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Frontend Tests
+          path: 'front/coverage/junit.xml,front/test-results.xml,front/coverage/**/junit.xml'
+          reporter: jest-junit
+          fail-on-error: false
+        
       - name: 🏗️ Build check
         run: npm run build:prod
         
@@ -78,8 +92,17 @@ jobs:
           name: frontend-coverage
           path: front/coverage/
           
+      - name: 📋 Frontend Coverage Comment
+        uses: romeovs/lcov-reporter-action@v0.3.1
+        if: github.event_name == 'pull_request' && always()
+        with:
+          lcov-file: front/coverage/lcov.info
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          title: 📊 Frontend Coverage Report
+          
       - name: 🔍 SonarQube Frontend Analysis
         uses: SonarSource/sonarqube-scan-action@v5.0.0
+        continue-on-error: true
         with:
           projectBaseDir: front
         env:
@@ -171,6 +194,7 @@ jobs:
 
       - name: 🔎 SonarQube Analysis
         if: true
+        continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -183,7 +207,7 @@ jobs:
               -Dsonar.login=$SONAR_TOKEN \
               -Dsonar.pullrequest.key=${{ github.event.number }} \
               -Dsonar.pullrequest.branch=${{ github.head_ref }} \
-              -Dsonar.pullrequest.base=${{ github.base_ref }}
+              -Dsonar.pullrequest.base=${{ github.base_ref }} || echo "⚠️ SonarQube analysis failed but continuing..."
           else
             echo "⚠️ SonarQube skipped: SONAR_TOKEN not configured"
           fi

@@ -12,9 +12,75 @@ env:
   BACKEND_IMAGE_NAME: bobapp_back_dg
 
 jobs:
+  run-tests:
+    name: 🧪 Run Tests & Quality Checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 🧪 Trigger PR Validation
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const workflow_run = await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'pr-validation.yml',
+              ref: context.ref,
+              inputs: {
+                check_all: 'true'
+              }
+            });
+            
+            core.info('Triggered PR validation workflow');
+            
+            // Wait for the workflow to start and complete
+            let attempts = 0;
+            const maxAttempts = 60;
+            let workflowRun = null;
+            
+            while (attempts < maxAttempts) {
+              await new Promise(resolve => setTimeout(resolve, 10000)); // Wait 10 seconds
+              
+              const runs = await github.rest.actions.listWorkflowRuns({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                workflow_id: 'pr-validation.yml',
+                head_sha: context.sha,
+                per_page: 1
+              });
+              
+              if (runs.data.workflow_runs.length > 0) {
+                workflowRun = runs.data.workflow_runs[0];
+                if (workflowRun.status === 'completed') {
+                  break;
+                }
+              }
+              
+              attempts++;
+            }
+            
+            if (!workflowRun || workflowRun.status !== 'completed') {
+              core.setFailed('PR validation workflow did not complete in time');
+              return;
+            }
+            
+            if (workflowRun.conclusion === 'failure') {
+              core.setFailed('PR validation workflow failed');
+              return;
+            }
+            
+            core.info(`PR validation completed with conclusion: ${workflowRun.conclusion}`);
+
   build-and-deploy:
     name: 🏗️ Build & Deploy Docker Images
     runs-on: ubuntu-latest
+    needs: run-tests
     timeout-minutes: 30
     
     steps:

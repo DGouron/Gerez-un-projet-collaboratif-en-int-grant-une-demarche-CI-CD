@@ -1,0 +1,250 @@
+name: 📸 PR Snapshot Build
+
+on:
+  pull_request:
+    branches: [main, develop]
+    types: [opened, synchronize, reopened]
+
+env:
+  REGISTRY: docker.io
+  FRONTEND_IMAGE_NAME: bobapp_front_dg
+  BACKEND_IMAGE_NAME: bobapp_back_dg
+
+jobs:
+  changes:
+    name: 🔄 Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      frontend: ${{ steps.changes.outputs.frontend }}
+      backend: ${{ steps.changes.outputs.backend }}
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+        
+      - name: 🔍 Detect changes
+        uses: dorny/paths-filter@v2
+        id: changes
+        with:
+          filters: |
+            frontend:
+              - 'front/**'
+            backend:
+              - 'back/**'
+
+  build-frontend-snapshot:
+    name: 🎨 Build Frontend Snapshot
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    timeout-minutes: 20
+    
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🏷️ Extract branch name
+        id: branch
+        run: |
+          BRANCH_NAME=${GITHUB_HEAD_REF}
+          CLEAN_BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's/[^a-zA-Z0-9]/-/g' | tr '[:upper:]' '[:lower:]')
+          echo "name=$CLEAN_BRANCH_NAME" >> $GITHUB_OUTPUT
+          echo "snapshot_tag=${CLEAN_BRANCH_NAME}-snapshot" >> $GITHUB_OUTPUT
+
+      - name: 🐳 Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: 🔐 Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: 🏗️ Build and push Frontend Snapshot
+        uses: docker/build-push-action@v5
+        with:
+          context: ./front
+          file: ./front/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.FRONTEND_IMAGE_NAME }}:${{ steps.branch.outputs.snapshot_tag }}
+          labels: |
+            org.opencontainers.image.title=${{ env.FRONTEND_IMAGE_NAME }}
+            org.opencontainers.image.description=BobApp Frontend Angular Application (Snapshot)
+            org.opencontainers.image.version=${{ steps.branch.outputs.snapshot_tag }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.branch=${{ github.head_ref }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-backend-snapshot:
+    name: ☕ Build Backend Snapshot
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    timeout-minutes: 20
+    
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🏷️ Extract branch name
+        id: branch
+        run: |
+          BRANCH_NAME=${GITHUB_HEAD_REF}
+          CLEAN_BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's/[^a-zA-Z0-9]/-/g' | tr '[:upper:]' '[:lower:]')
+          echo "name=$CLEAN_BRANCH_NAME" >> $GITHUB_OUTPUT
+          echo "snapshot_tag=${CLEAN_BRANCH_NAME}-snapshot" >> $GITHUB_OUTPUT
+
+      - name: 🐳 Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: 🔐 Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: 🏗️ Build and push Backend Snapshot
+        uses: docker/build-push-action@v5
+        with:
+          context: ./back
+          file: ./back/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.BACKEND_IMAGE_NAME }}:${{ steps.branch.outputs.snapshot_tag }}
+          labels: |
+            org.opencontainers.image.title=${{ env.BACKEND_IMAGE_NAME }}
+            org.opencontainers.image.description=BobApp Backend Spring Boot Application (Snapshot)
+            org.opencontainers.image.version=${{ steps.branch.outputs.snapshot_tag }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.branch=${{ github.head_ref }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  create-snapshot-compose:
+    name: 📝 Create Snapshot Docker Compose
+    runs-on: ubuntu-latest
+    needs: [build-frontend-snapshot, build-backend-snapshot]
+    if: always() && (needs.build-frontend-snapshot.result == 'success' || needs.build-backend-snapshot.result == 'success')
+    
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🏷️ Extract branch name
+        id: branch
+        run: |
+          BRANCH_NAME=${GITHUB_HEAD_REF}
+          CLEAN_BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's/[^a-zA-Z0-9]/-/g' | tr '[:upper:]' '[:lower:]')
+          echo "name=$CLEAN_BRANCH_NAME" >> $GITHUB_OUTPUT
+          echo "snapshot_tag=${CLEAN_BRANCH_NAME}-snapshot" >> $GITHUB_OUTPUT
+
+      - name: 📝 Generate snapshot docker-compose.yml
+        run: |
+          cat > docker-compose-snapshot.yml << EOF
+          services:
+            frontend:
+              image: ${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.FRONTEND_IMAGE_NAME }}:${{ steps.branch.outputs.snapshot_tag }}
+              ports:
+                - "3001:80"
+              environment:
+                - NODE_ENV=development
+              restart: unless-stopped
+              healthcheck:
+                test: ["CMD", "curl", "-f", "http://localhost:80"]
+                interval: 30s
+                timeout: 10s
+                retries: 3
+            
+            backend:
+              image: ${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.BACKEND_IMAGE_NAME }}:${{ steps.branch.outputs.snapshot_tag }}
+              ports:
+                - "8081:8080"
+              environment:
+                - SPRING_PROFILES_ACTIVE=dev
+                - JAVA_OPTS=-Xmx512m -Xms256m
+              restart: unless-stopped
+              healthcheck:
+                test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+                interval: 30s
+                timeout: 10s
+                retries: 3
+              depends_on:
+                - frontend
+          EOF
+
+      - name: 📦 Upload snapshot docker-compose.yml
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-compose-${{ steps.branch.outputs.snapshot_tag }}
+          path: docker-compose-snapshot.yml
+          retention-days: 7
+
+  snapshot-summary:
+    name: 📊 Snapshot Summary
+    runs-on: ubuntu-latest
+    needs: [changes, build-frontend-snapshot, build-backend-snapshot, create-snapshot-compose]
+    if: always()
+    
+    steps:
+      - name: 🏷️ Extract branch name
+        id: branch
+        run: |
+          BRANCH_NAME=${GITHUB_HEAD_REF}
+          CLEAN_BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's/[^a-zA-Z0-9]/-/g' | tr '[:upper:]' '[:lower:]')
+          echo "snapshot_tag=${CLEAN_BRANCH_NAME}-snapshot" >> $GITHUB_OUTPUT
+
+      - name: 📝 Add PR comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const branchTag = '${{ steps.branch.outputs.snapshot_tag }}';
+            const frontendBuilt = '${{ needs.build-frontend-snapshot.result }}' === 'success';
+            const backendBuilt = '${{ needs.build-backend-snapshot.result }}' === 'success';
+            
+            let comment = `## 📸 Snapshot Images Built\n\n`;
+            comment += `**Branch:** \`${context.payload.pull_request.head.ref}\`\n`;
+            comment += `**Tag:** \`${branchTag}\`\n\n`;
+            
+            if (frontendBuilt) {
+              comment += `✅ **Frontend:** \`${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.FRONTEND_IMAGE_NAME }}:${branchTag}\`\n`;
+              comment += `🚀 **Run:** \`docker run -p 3001:80 ${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.FRONTEND_IMAGE_NAME }}:${branchTag}\`\n\n`;
+            }
+            
+            if (backendBuilt) {
+              comment += `✅ **Backend:** \`${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.BACKEND_IMAGE_NAME }}:${branchTag}\`\n`;
+              comment += `🚀 **Run:** \`docker run -p 8081:8080 ${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.BACKEND_IMAGE_NAME }}:${branchTag}\`\n\n`;
+            }
+            
+            if (frontendBuilt && backendBuilt) {
+              comment += `📦 **Docker Compose:** Available in artifacts as \`docker-compose-${branchTag}\`\n`;
+              comment += `Use ports 3001 (frontend) and 8081 (backend) to avoid conflicts with production.\n`;
+            }
+            
+            if (!frontendBuilt && !backendBuilt) {
+              comment += `⚠️ No images were built (no changes detected or build failed).\n`;
+            }
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+      - name: 📊 Generate Job Summary
+        run: |
+          echo "## 📸 Snapshot Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** ${{ github.head_ref }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Tag:** ${{ steps.branch.outputs.snapshot_tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Build Results:" >> $GITHUB_STEP_SUMMARY
+          echo "- Frontend: ${{ needs.build-frontend-snapshot.result || 'skipped' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Backend: ${{ needs.build-backend-snapshot.result || 'skipped' }}" >> $GITHUB_STEP_SUMMARY 
