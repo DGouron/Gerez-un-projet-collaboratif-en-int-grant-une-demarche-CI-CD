@@ -178,7 +178,7 @@ jobs:
           if [ ! -z "$SONAR_TOKEN" ]; then
             echo "🔍 Running SonarQube analysis..."
             ./mvnw sonar:sonar \
-              -Dsonar.projectKey=DGouron_Gerez-un-projet-collaboratif-en-int-grant-une-demarche-CI-CD-backend \
+              -Dsonar.projectKey=dgouron_Gerez-un-projet-collaboratif-en-int-grant-une-demarche-CI-CD-backend \
               -Dsonar.host.url=${{ secrets.SONAR_HOST_URL || 'https://sonarcloud.io' }} \
               -Dsonar.login=$SONAR_TOKEN \
               -Dsonar.pullrequest.key=${{ github.event.number }} \
