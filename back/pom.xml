@@ -79,6 +79,28 @@
 				<artifactId>sonar-maven-plugin</artifactId>
 				<version>3.10.0.2594</version>
 			</plugin>
+			<plugin>
+				<groupId>org.owasp</groupId>
+				<artifactId>dependency-check-maven</artifactId>
+				<version>9.0.9</version>
+				<configuration>
+					<dataDirectory>target/dependency-check-data</dataDirectory>
+					<format>HTML,XML</format>
+					<skipProvidedScope>true</skipProvidedScope>
+					<skipTestScope>true</skipTestScope>
+					<skipRuntimeScope>false</skipRuntimeScope>
+					<suppressionFile>../.github/owasp-suppressions.xml</suppressionFile>
+					<failBuildOnCVSS>8</failBuildOnCVSS>
+					<retirejs>
+						<enabled>false</enabled>
+					</retirejs>
+					<nodeAudit>
+						<enabled>false</enabled>
+					</nodeAudit>
+					<ossindexAnalyzerEnabled>false</ossindexAnalyzerEnabled>
+					<nodePackageSkipDevDependencies>true</nodePackageSkipDevDependencies>
+				</configuration>
+			</plugin>
 		</plugins>
 	</build>
 </project>

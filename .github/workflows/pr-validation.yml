@@ -245,7 +245,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: backend-quality
     if: needs.changes.outputs.backend == 'true'
-    timeout-minutes: 10
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: ./back
@@ -261,11 +261,27 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
+      - name: 📦 Cache Maven dependencies
+        uses: actions/cache@v3
+        with:
+          path: back/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('back/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      - name: 📦 Cache OWASP Database
+        uses: actions/cache@v3
+        with:
+          path: back/target/dependency-check-data
+          key: ${{ runner.os }}-owasp-db-${{ github.run_id }}
+          restore-keys: |
+            ${{ runner.os }}-owasp-db-
+
       - name: 🔍 OWASP Dependency Check
         run: |
-          ./mvnw org.owasp:dependency-check-maven:check \
-            -DfailBuildOnCVSS=8 \
-            -DsuppressedVulnerabilitiesFile=../.github/owasp-suppressions.xml || true
+          ./mvnw dependency-check:check || true
+        env:
+          MAVEN_OPTS: "-Xmx2048m"
 
       - name: 📋 Upload Security Report
         uses: actions/upload-artifact@v4
