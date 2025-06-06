@@ -1,7 +1,7 @@
 import { Component, type OnInit } from '@angular/core';
 import type { Observable } from 'rxjs';
 import type { Joke } from './model/joke.model';
-import type { JokesService } from './services/jokes.service';
+import { JokesService } from './services/jokes.service';
 
 @Component({
   selector: 'app-root',

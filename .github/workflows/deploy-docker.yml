@@ -1,0 +1,246 @@
+name: 🚀 Deploy to Docker Hub
+
+on:
+  push:
+    branches: [main]
+  release:
+    types: [published]
+
+env:
+  REGISTRY: docker.io
+  FRONTEND_IMAGE_NAME: bobapp_front_dg
+  BACKEND_IMAGE_NAME: bobapp_back_dg
+
+jobs:
+  build-and-deploy:
+    name: 🏗️ Build & Deploy Docker Images
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 🏷️ Extract metadata
+        id: meta
+        run: |
+          # Generate version from git
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/}
+          else
+            VERSION=$(date +%Y%m%d)-${GITHUB_SHA::8}
+          fi
+          
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "date=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_OUTPUT
+          echo "commit=${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
+
+      - name: 🐳 Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: 🔐 Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  build-frontend:
+    name: 🎨 Build Frontend Image
+    runs-on: ubuntu-latest
+    needs: build-and-deploy
+    timeout-minutes: 20
+    
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🏷️ Extract metadata
+        id: meta
+        run: |
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/}
+          else
+            VERSION=$(date +%Y%m%d)-${GITHUB_SHA::8}
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: 🐳 Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: 🔐 Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: 🏗️ Build and push Frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./front
+          file: ./front/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.FRONTEND_IMAGE_NAME }}:latest
+            ${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.FRONTEND_IMAGE_NAME }}:${{ steps.meta.outputs.version }}
+          labels: |
+            org.opencontainers.image.title=${{ env.FRONTEND_IMAGE_NAME }}
+            org.opencontainers.image.description=BobApp Frontend Angular Application
+            org.opencontainers.image.version=${{ steps.meta.outputs.version }}
+            org.opencontainers.image.created=${{ steps.meta.outputs.date }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-backend:
+    name: ☕ Build Backend Image
+    runs-on: ubuntu-latest
+    needs: build-and-deploy
+    timeout-minutes: 20
+    
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🏷️ Extract metadata
+        id: meta
+        run: |
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/}
+          else
+            VERSION=$(date +%Y%m%d)-${GITHUB_SHA::8}
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: 🐳 Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: 🔐 Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: 🏗️ Build and push Backend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./back
+          file: ./back/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.BACKEND_IMAGE_NAME }}:latest
+            ${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.BACKEND_IMAGE_NAME }}:${{ steps.meta.outputs.version }}
+          labels: |
+            org.opencontainers.image.title=${{ env.BACKEND_IMAGE_NAME }}
+            org.opencontainers.image.description=BobApp Backend Spring Boot Application
+            org.opencontainers.image.version=${{ steps.meta.outputs.version }}
+            org.opencontainers.image.created=${{ steps.meta.outputs.date }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  create-docker-compose:
+    name: 📝 Create Docker Compose
+    runs-on: ubuntu-latest
+    needs: [build-frontend, build-backend]
+    
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🏷️ Extract metadata
+        id: meta
+        run: |
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/}
+          else
+            VERSION=$(date +%Y%m%d)-${GITHUB_SHA::8}
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: 📝 Generate docker-compose.yml
+        run: |
+          cat > docker-compose.yml << EOF
+          services:
+            frontend:
+              image: ${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.FRONTEND_IMAGE_NAME }}:${{ steps.meta.outputs.version }}
+              ports:
+                - "3000:80"
+              environment:
+                - NODE_ENV=production
+              restart: unless-stopped
+              healthcheck:
+                test: ["CMD", "curl", "-f", "http://localhost:80"]
+                interval: 30s
+                timeout: 10s
+                retries: 3
+            
+            backend:
+              image: ${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.BACKEND_IMAGE_NAME }}:${{ steps.meta.outputs.version }}
+              ports:
+                - "8080:8080"
+              environment:
+                - SPRING_PROFILES_ACTIVE=prod
+                - JAVA_OPTS=-Xmx512m -Xms256m
+              restart: unless-stopped
+              healthcheck:
+                test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+                interval: 30s
+                timeout: 10s
+                retries: 3
+              depends_on:
+                - frontend
+            
+            # Optional: Add reverse proxy
+            # nginx:
+            #   image: nginx:alpine
+            #   ports:
+            #     - "80:80"
+            #   volumes:
+            #     - ./nginx.conf:/etc/nginx/nginx.conf:ro
+            #   depends_on:
+            #     - frontend
+            #     - backend
+            #   restart: unless-stopped
+          EOF
+
+      - name: 📦 Upload docker-compose.yml
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-compose-${{ steps.meta.outputs.version }}
+          path: docker-compose.yml
+          retention-days: 30
+
+  deployment-summary:
+    name: 📊 Deployment Summary
+    runs-on: ubuntu-latest
+    needs: [build-frontend, build-backend, create-docker-compose]
+    if: always()
+    
+    steps:
+      - name: 🎉 Deployment Success
+        if: needs.build-frontend.result == 'success' && needs.build-backend.result == 'success'
+        run: |
+          echo "🎉 Deployment successful!"
+          echo "✅ Frontend image: ${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.FRONTEND_IMAGE_NAME }}:latest"
+          echo "✅ Backend image: ${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.BACKEND_IMAGE_NAME }}:latest"
+          echo ""
+          echo "🚀 Quick start:"
+          echo "docker run -p 3000:80 ${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.FRONTEND_IMAGE_NAME }}:latest"
+          echo "docker run -p 8080:8080 ${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.BACKEND_IMAGE_NAME }}:latest"
+
+      - name: ❌ Deployment Failed
+        if: needs.build-frontend.result != 'success' || needs.build-backend.result != 'success'
+        run: |
+          echo "❌ Deployment failed!"
+          echo "Frontend: ${{ needs.build-frontend.result }}"
+          echo "Backend: ${{ needs.build-backend.result }}"
+          exit 1 
