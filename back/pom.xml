@@ -69,6 +69,9 @@
 					</includes>
 					<reportFormat>xml</reportFormat>
 					<useSystemClassLoader>false</useSystemClassLoader>
+					<reportsDirectory>${project.build.directory}/surefire-reports</reportsDirectory>
+					<forkCount>1</forkCount>
+					<reuseForks>true</reuseForks>
 				</configuration>
 			</plugin>
 			<plugin>
