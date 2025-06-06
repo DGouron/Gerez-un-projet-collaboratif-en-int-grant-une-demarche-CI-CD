@@ -77,6 +77,14 @@ jobs:
         with:
           name: frontend-coverage
           path: front/coverage/
+          
+      - name: 🔍 SonarQube Frontend Analysis
+        uses: SonarSource/sonarcloud-github-action@master
+        with:
+          projectBaseDir: front
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
   backend-quality:
     name: ☕ Backend Quality Check  
