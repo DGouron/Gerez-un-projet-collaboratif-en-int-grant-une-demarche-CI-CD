@@ -232,7 +232,8 @@ jobs:
 
       - name: 🐳 Build Docker Image
         run: |
-          docker build -t bobapp-backend:test .
+          # Use build cache to speed up successive builds
+          docker build --cache-from bobapp-backend:test -t bobapp-backend:test .
           docker images | grep bobapp-backend
 
       - name: 🔍 Test Docker Image
