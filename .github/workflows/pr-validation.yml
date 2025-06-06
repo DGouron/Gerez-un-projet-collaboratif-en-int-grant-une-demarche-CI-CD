@@ -66,10 +66,10 @@ jobs:
           fi
         
       - name: 🧪 Run tests
-        run: npm run test:ci || npm run test -- --watch=false --browsers=ChromeHeadless --code-coverage
+        run: npm run test:ci
         
       - name: 🏗️ Build check
-        run: npm run build:prod || npm run build -- --configuration=production
+        run: npm run build:prod
         
       - name: 📊 Upload coverage
         uses: actions/upload-artifact@v4
@@ -79,7 +79,7 @@ jobs:
           path: front/coverage/
           
       - name: 🔍 SonarQube Frontend Analysis
-        uses: SonarSource/sonarcloud-github-action@master
+        uses: SonarSource/sonarqube-scan-action@v5.0.0
         with:
           projectBaseDir: front
         env:
@@ -110,7 +110,7 @@ jobs:
           cache: maven
 
       - name: 📦 Cache Maven dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: back/.m2/repository
           key: ${{ runner.os }}-maven-${{ hashFiles('back/pom.xml') }}
@@ -213,7 +213,7 @@ jobs:
           cache: maven
 
       - name: 📦 Cache Maven dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: back/.m2/repository
           key: ${{ runner.os }}-maven-${{ hashFiles('back/pom.xml') }}
@@ -270,7 +270,7 @@ jobs:
           cache: maven
 
       - name: 📦 Cache Maven dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: back/.m2/repository
           key: ${{ runner.os }}-maven-${{ hashFiles('back/pom.xml') }}
@@ -278,7 +278,7 @@ jobs:
             ${{ runner.os }}-maven-
 
       - name: 📦 Cache OWASP Database
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: back/target/dependency-check-data
           key: ${{ runner.os }}-owasp-db-${{ github.run_id }}
