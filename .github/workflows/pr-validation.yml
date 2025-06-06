@@ -162,7 +162,7 @@ jobs:
           update-comment: true
 
       - name: 🔎 SonarQube Analysis
-        if: false  # Temporarily disabled until SonarCloud projects are properly configured
+        if: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -170,7 +170,7 @@ jobs:
           if [ ! -z "$SONAR_TOKEN" ]; then
             echo "🔍 Running SonarQube analysis..."
             ./mvnw sonar:sonar \
-              -Dsonar.projectKey=gerez-projet-cicd-backend \
+              -Dsonar.projectKey=DGouron_Gerez-un-projet-collaboratif-en-int-grant-une-demarche-CI-CD \
               -Dsonar.host.url=${{ secrets.SONAR_HOST_URL || 'https://sonarcloud.io' }} \
               -Dsonar.login=$SONAR_TOKEN \
               -Dsonar.pullrequest.key=${{ github.event.number }} \
